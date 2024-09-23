@@ -14,6 +14,8 @@
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="1.16.4" />
     <PackageReference Include="Microsoft.ApplicationInsights.WorkerService" Version="2.21.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.ApplicationInsights" Version="1.1.0" />
+	  <PackageReference Include="DevExpress.Document.Processor" Version="23.2.5" />
+	  <PackageReference Include="Azure.Storage.Blobs" Version="12.22.0" />
   </ItemGroup>
   <ItemGroup>
     <None Update="host.json">
