@@ -37,6 +37,7 @@ namespace odyxfunc
         public async Task<IActionResult> getblob([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post")] HttpRequest req)
         {
             string blobName = "82b11634-17fe-4137-b4a5-1ff0fb09aac5.pdf";
+            string fullPath_Odyx = Path.Combine("Files", "OdyxLogo_Face.png");
 
             try
             {
@@ -48,12 +49,35 @@ namespace odyxfunc
                 // Download the blob content
                 BlobDownloadInfo download = await blobClient.DownloadAsync();
 
-                // Convert blob to string or return file content
-                using (StreamReader reader = new StreamReader(download.Content))
+                // Save the downloaded PDF locally
+                string tempFilePath = Path.GetTempFileName();
+                using (var fileStream = File.OpenWrite(tempFilePath))
                 {
-                    string fileContent = await reader.ReadToEndAsync();
-                    return new OkObjectResult(fileContent); // Return the file content as string with 200 OK status
+                    await download.Content.CopyToAsync(fileStream);
                 }
+
+                // Load the PDF for modification
+                using (PdfDocumentProcessor pdfDocumentProcessor = new PdfDocumentProcessor())
+                {
+                    pdfDocumentProcessor.LoadDocument(tempFilePath);
+
+                    // Add the logo to the first page (index 0), customize the coordinates as necessary
+                    AddImageToPdfPage(pdfDocumentProcessor, 0, fullPath_Odyx, 50, 50, 100, 100);
+
+                    // Save the updated PDF
+                    string updatedPdfPath = Path.GetTempFileName();
+                    pdfDocumentProcessor.SaveDocument(updatedPdfPath);
+
+                    // Upload the modified PDF back to Blob Storage
+                    BlobClient uploadBlobClient = containerClient.GetBlobClient($"modified-{blobName}");
+
+                    using (FileStream uploadFileStream = File.OpenRead(updatedPdfPath))
+                    {
+                        await uploadBlobClient.UploadAsync(uploadFileStream, true);
+                    }
+                }
+
+                return new OkObjectResult($"PDF has been updated and re-uploaded as modified-{blobName}");
             }
             catch (Exception ex)
             {
@@ -62,7 +86,6 @@ namespace odyxfunc
             }
         }
 
-        [Function("AddImageToPdfPage")]
         private void AddImageToPdfPage(PdfDocumentProcessor pdfDocumentProcessor, int pageIndex, string imagePath, float x, float y, float width, float height)
         {
             // Create a graphics context for drawing images
