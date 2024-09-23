@@ -14,7 +14,7 @@ namespace odyxfunc
             _logger = logger;
         }
 
-        [Function("test")]
+        [Function("test2")]
         public IActionResult Run([HttpTrigger(AuthorizationLevel.Function, "get", "post")] HttpRequest req)
         {
             _logger.LogInformation("C# HTTP trigger function processed a request.");
