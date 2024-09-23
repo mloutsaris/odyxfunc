@@ -34,7 +34,7 @@ namespace odyxfunc
         }
 
         [Function("getblob")]
-        public async Task<IActionResult> getblob([HttpTrigger(AuthorizationLevel.Function, "get", "post")] HttpRequest req)
+        public async Task<IActionResult> getblob([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post")] HttpRequest req)
         {
             string blobName = "82b11634-17fe-4137-b4a5-1ff0fb09aac5.pdf";
 
