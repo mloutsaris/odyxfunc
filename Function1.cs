@@ -2,8 +2,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
-using static System.Net.Mime.MediaTypeNames;
-using System.Drawing;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using DevExpress.Pdf;
@@ -17,13 +15,16 @@ namespace odyxfunc
     {
         private readonly ILogger<Function1> _logger;
         private readonly string _connectionString;
+        private readonly string _connectionString_DEV;
         private readonly string _contractPdfsContainerName;
+
 
 
         public Function1(ILogger<Function1> logger)
         {
             _logger = logger;
             _contractPdfsContainerName = Environment.GetEnvironmentVariable("CONTRACTPDFS_CONTAINER_NAME");
+            _connectionString_DEV = Environment.GetEnvironmentVariable("AZURESTORAGE_CONNECTION_STRING_DEV");
             _connectionString = Environment.GetEnvironmentVariable("AZURESTORAGE_CONNECTION_STRING");
 
         }
@@ -39,19 +40,23 @@ namespace odyxfunc
         public async Task<IActionResult> AddLogoToPDF([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post")] HttpRequest req)
         {
             string blobName;
+            bool production = false;
+            bool result = false; // Declare the result variable outside
 
-            // Extract the blobName from the query parameters (for GET requests)
+            // Extract the blobName and production from the query parameters (for GET requests)
             if (req.Method == HttpMethods.Get)
             {
                 blobName = req.Query["blobName"];
+                production = req.Query.ContainsKey("production") && bool.TryParse(req.Query["production"], out result) && result;
             }
-            // Extract the blobName from the request body (for POST requests)
+            // Extract the blobName and production from the request body (for POST requests)
             else if (req.Method == HttpMethods.Post)
             {
                 // Read the request body
                 string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
                 dynamic data = JsonConvert.DeserializeObject(requestBody);
                 blobName = data?.blobName;
+                production = data?.production != null && bool.TryParse((string)data.production, out result) && result;
             }
             else
             {
@@ -64,10 +69,12 @@ namespace odyxfunc
                 return new BadRequestObjectResult("blobName is required.");
             }
 
+
             try
             {
+                string connectionString = production ? _connectionString : _connectionString_DEV;
 
-                BlobServiceClient blobServiceClient = new BlobServiceClient(_connectionString);
+                BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
                 BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(_contractPdfsContainerName);
                 BlobClient blobClient = containerClient.GetBlobClient(blobName);
 
@@ -168,6 +175,8 @@ namespace odyxfunc
             float width = data?.width;
             float height = data?.height;
             bool allPages = data?.allPages ?? false;
+            bool production = data?.production ?? false;
+
 
             if (string.IsNullOrEmpty(blobName))
             {
@@ -176,8 +185,10 @@ namespace odyxfunc
 
             try
             {
-               
-                BlobServiceClient blobServiceClient = new BlobServiceClient(_connectionString);
+
+                string connectionString = production ? _connectionString : _connectionString_DEV;
+
+                BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
                 BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(_contractPdfsContainerName);
                 BlobClient blobClient = containerClient.GetBlobClient(blobName);
 
