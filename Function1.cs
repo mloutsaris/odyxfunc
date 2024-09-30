@@ -37,8 +37,8 @@ namespace odyxfunc
         }
 
 
-        [Function("AddLogoToPdfFromByteArray")]
-        public async Task<IActionResult> AddLogoToPdfFromByteArray([HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequest req)
+        [Function("AddLogoToPdfFromBase64ByteArray")]
+        public async Task<IActionResult> AddLogoToPdfFromBase64ByteArray([HttpTrigger(AuthorizationLevel.Anonymous, "post")] HttpRequest req)
         {
             try
             {
