@@ -23,9 +23,9 @@ namespace odyxfunc
         public Function1(ILogger<Function1> logger)
         {
             _logger = logger;
-            _contractPdfsContainerName = Environment.GetEnvironmentVariable("CONTRACTPDFS_CONTAINER_NAME");
-            _connectionString_DEV = Environment.GetEnvironmentVariable("AZURESTORAGE_CONNECTION_STRING_DEV");
-            _connectionString = Environment.GetEnvironmentVariable("AZURESTORAGE_CONNECTION_STRING");
+            _contractPdfsContainerName = "";
+            _connectionString_DEV = "";
+            _connectionString = "";
 
         }
 
@@ -63,9 +63,9 @@ namespace odyxfunc
                 // Convert the base64 string back to a byte array
                 byte[] pdfBytes = Convert.FromBase64String(data.PdfBytes);
 
-                // Call the helper method to add the logos and get the modified PDF byte array
+                string? footerLogo = !string.IsNullOrEmpty(data.FooterLogo) ? data.FooterLogo : null;
 
-                byte[] modifiedPdfBytes = await AddLogoToPdf_2(pdfBytes, data.HeaderLogo, data.FooterLogo);
+                byte[] modifiedPdfBytes = await AddLogoToPdf_2(pdfBytes, data.HeaderLogo, footerLogo);
 
                 // Convert the modified PDF byte array back to base64 for the response
                 string base64ModifiedPdf = Convert.ToBase64String(modifiedPdfBytes);
@@ -81,7 +81,7 @@ namespace odyxfunc
         }
 
 
-        private async Task<byte[]> AddLogoToPdf_2(byte[] pdfBytes, string headerLogoBase64, string footerLogoBase64)
+        private async Task<byte[]> AddLogoToPdf_2(byte[] pdfBytes, string headerLogoBase64, string? footerLogoBase64)
         {
             try
             {
@@ -123,11 +123,8 @@ namespace odyxfunc
 
         private void AddBase64ImageToPdfPage(PdfDocumentProcessor pdfDocumentProcessor, int pageIndex, string base64Image, float x, float y, float maxWidth, float maxHeight, bool cover = false)
         {
-            // Strip the Base64 header (data:image/png;base64,) if it's present
-            string base64String = base64Image.Contains(",") ? base64Image.Split(',')[1] : base64Image;
-
             // Decode Base64 string into a byte array
-            byte[] imageBytes = Convert.FromBase64String(base64String);
+            byte[] imageBytes = Convert.FromBase64String(base64Image);
 
             // Convert byte array into an image
             using (MemoryStream ms = new MemoryStream(imageBytes))
