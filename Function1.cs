@@ -121,96 +121,7 @@ namespace odyxfunc
             }
         }
 
-        //----------------------------------------------------------------------
-
-        [Function("AddLogoToPDF")]
-        public async Task<IActionResult> AddLogoToPDF([HttpTrigger(AuthorizationLevel.Anonymous, "get", "post")] HttpRequest req)
-        {
-            string blobName;
-            bool production = false;
-            bool result = false; // Declare the result variable outside
-
-            // Extract the blobName and production from the query parameters (for GET requests)
-            if (req.Method == HttpMethods.Get)
-            {
-                blobName = req.Query["blobName"];
-                production = req.Query.ContainsKey("production") && bool.TryParse(req.Query["production"], out result) && result;
-            }
-            // Extract the blobName and production from the request body (for POST requests)
-            else if (req.Method == HttpMethods.Post)
-            {
-                // Read the request body
-                string requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-                dynamic data = JsonConvert.DeserializeObject(requestBody);
-                blobName = data?.blobName;
-                production = data?.production != null && bool.TryParse((string)data.production, out result) && result;
-            }
-            else
-            {
-                return new BadRequestObjectResult("Unsupported HTTP method");
-            }
-
-            // Validate that blobName is not null or empty
-            if (string.IsNullOrEmpty(blobName))
-            {
-                return new BadRequestObjectResult("blobName is required.");
-            }
-
-
-            try
-            {
-                string connectionString = production ? _connectionString : _connectionString_DEV;
-
-                BlobServiceClient blobServiceClient = new BlobServiceClient(connectionString);
-                BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient(_contractPdfsContainerName);
-                BlobClient blobClient = containerClient.GetBlobClient(blobName);
-
-                // Download the blob content into a MemoryStream
-                using (MemoryStream pdfStream = new MemoryStream())
-                {
-                    BlobDownloadInfo download = await blobClient.DownloadAsync();
-                    await download.Content.CopyToAsync(pdfStream);
-                    pdfStream.Position = 0; // Reset stream position for reading
-
-                    // Load the PDF for modification
-                    using (PdfDocumentProcessor pdfDocumentProcessor = new PdfDocumentProcessor())
-                    {
-                        pdfDocumentProcessor.LoadDocument(pdfStream);
-
-                        //used site base64-image.de
-                        string fulllogo_base64 = "thisisthelogoasbase64";
-                        string faceonly_base64 = "thisistheotherlogoasbase64";
-
-
-                        for (int pageIndex = 0; pageIndex < pdfDocumentProcessor.Document.Pages.Count; pageIndex++)
-                        {
-                            // Add the logo to the specified pages, customize coordinates as necessary
-                            AddBase64ImageToPdfPage(pdfDocumentProcessor, pageIndex, fulllogo_base64, 50, 27, 144, 40, true);
-                            AddBase64ImageToPdfPage(pdfDocumentProcessor, pageIndex, faceonly_base64, 50, 1075, 40, 40, true);
-                        }
-
-                        // Save the updated PDF to a MemoryStream
-                        using (MemoryStream updatedPdfStream = new MemoryStream())
-                        {
-                            pdfDocumentProcessor.SaveDocument(updatedPdfStream);
-                            updatedPdfStream.Position = 0; // Reset stream position for uploading
-
-                            // Upload the modified PDF back to Blob Storage
-                            await blobClient.UploadAsync(updatedPdfStream, true);
-                        }
-                    }
-                }
-
-                return new OkObjectResult($"PDF has been updated and re-uploaded as modified-{blobName}");
-            }
-            catch (Exception ex)
-            {
-                // Log the error (optional) and return a Not Found or error response
-                return new BadRequestObjectResult($"Error: {ex.Message}");
-            }
-        }
-
-        private void AddBase64ImageToPdfPage(PdfDocumentProcessor pdfDocumentProcessor, int pageIndex, string base64Image, float x, float y, float width, float height, bool cover = false)
+        private void AddBase64ImageToPdfPage(PdfDocumentProcessor pdfDocumentProcessor, int pageIndex, string base64Image, float x, float y, float maxWidth, float maxHeight, bool cover = false)
         {
             // Strip the Base64 header (data:image/png;base64,) if it's present
             string base64String = base64Image.Contains(",") ? base64Image.Split(',')[1] : base64Image;
@@ -223,11 +134,28 @@ namespace odyxfunc
             {
                 using (System.Drawing.Image image = System.Drawing.Image.FromStream(ms))
                 {
+                    // Get the original dimensions of the image
+                    float imageOriginalWidth = image.Width;
+                    float imageOriginalHeight = image.Height;
+
+                    // Calculate the scaling factor to fit the image within the maxWidth and maxHeight while preserving the aspect ratio
+                    float widthScale = maxWidth / imageOriginalWidth;
+                    float heightScale = maxHeight / imageOriginalHeight;
+                    float scale = Math.Min(widthScale, heightScale);
+
+                    // Scale the image based on the calculated factor
+                    float scaledWidth = imageOriginalWidth * scale;
+                    float scaledHeight = imageOriginalHeight * scale;
+
+                    // Calculate the position (x, y) to center the image if needed
+                    float centeredX = x + (maxWidth - scaledWidth) / 2;
+                    float centeredY = y + (maxHeight - scaledHeight) / 2;
+
                     // Create a graphics context for drawing images
                     using (DevExpress.Pdf.PdfGraphics graphics = pdfDocumentProcessor.CreateGraphics())
                     {
                         // Define the rectangle where the image will be placed
-                        System.Drawing.RectangleF imageRect = new System.Drawing.RectangleF(x, y, width, height);
+                        System.Drawing.RectangleF imageRect = new System.Drawing.RectangleF(centeredX, centeredY, scaledWidth, scaledHeight);
 
                         if (cover)
                         {
@@ -238,7 +166,7 @@ namespace odyxfunc
                             }
                         }
 
-                        // Draw the image on top of the white background
+                        // Draw the image on top of the white background (if cover = true)
                         graphics.DrawImage(image, imageRect);
 
                         // Finalize the drawing operation by adding it to the page
